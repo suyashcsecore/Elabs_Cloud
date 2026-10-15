@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: elabs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: elabs_user
+      POSTGRES_PASSWORD: elabs_password
+      POSTGRES_DB: elabs_registration_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/seeds.sql:/docker-entrypoint-initdb.d/02_seeds.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U elabs_user -d elabs_registration_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: elabs-backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      DATABASE_URL: postgres://elabs_user:elabs_password@postgres:5432/elabs_registration_db
+      DB_SSL: 'false'
+      JWT_SECRET: production_local_docker_super_secret_key_12345
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
